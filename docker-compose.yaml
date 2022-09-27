@@ -1,0 +1,87 @@
+version: '3.8'
+networks:
+  app:
+    driver: bridge
+volumes:
+  database_data:
+    driver: local
+services:
+  node:
+    build:
+      context: ./docker/node
+      dockerfile: Dockerfile
+    container_name: node
+    tty: true
+    ports:
+    - 80:3000
+    volumes:
+    - ./frontend:/var/www
+    networks:
+      - app
+
+  php:
+    build:
+      args:
+        user: node
+        uid: 1000
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: php
+    tty: true
+    volumes:
+      - ./backend:/var/www
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      SERVICE_NAME: php
+      SERVICE_TAGS: dev
+    depends_on:
+      - postgres
+    networks:
+      - app
+
+  #Nginx Service
+  webserver:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: webserver
+    tty: true
+    ports:
+      - 5000:80
+    volumes:
+      - ./backend:/var/www
+    links:
+      - php
+    depends_on:
+      - php
+    networks:
+      - app
+
+  ### PostgreSQL ###########################################
+  postgres:
+    image: postgres:13-alpine
+    container_name: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: 'postgres'
+    volumes:
+      - database_data:/var/lib/postgresql/data
+    networks:
+      - app
+
+  ### PgAdmin ##############################################
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - postgres
+    networks:
+      - app
